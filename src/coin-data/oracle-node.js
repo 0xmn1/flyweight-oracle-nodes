@@ -1,12 +1,15 @@
 const axios = require('axios');
 const Web3 = require('web3');
+const fs = require('fs');
+const path = require('path');
 
 const { ethers } = require('ethers');
 require('dotenv').config();
 const { API_KEY_ALCHEMY, API_KEY_COINMARKETCAP, PRIVATE_KEY, ORACLE_CONTRACT_ADDRESS } = process.env;
 
 const web3Alchemy = new Web3(`wss://eth-goerli.g.alchemy.com/v2/${API_KEY_ALCHEMY}`);
-const oracleContractAbi = [{"anonymous":false,"inputs":[],"name":"GetNewOrderResults","type":"event"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"orders","outputs":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"enum Flyweight.OrderState","name":"orderState","type":"uint8"},{"internalType":"string","name":"tokenIn","type":"string"},{"internalType":"string","name":"tokenOut","type":"string"},{"internalType":"string","name":"tokenInTriggerPrice","type":"string"},{"internalType":"enum Flyweight.OrderTriggerDirection","name":"direction","type":"uint8"},{"internalType":"uint256","name":"tokenInAmount","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"ordersCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"prices","outputs":[{"internalType":"string","name":"token0","type":"string"},{"internalType":"string","name":"token1","type":"string"},{"internalType":"string","name":"unixTimestamp","type":"string"},{"internalType":"string","name":"price","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"pricesCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256[]","name":"triggeredOrderIds","type":"uint256[]"}],"name":"storeAndProcessOrderResults","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"string","name":"token0","type":"string"},{"internalType":"string","name":"token1","type":"string"},{"internalType":"string","name":"unixTimestamp","type":"string"},{"internalType":"string","name":"price","type":"string"}],"name":"storePriceAndGetNewOrderResults","outputs":[],"stateMutability":"nonpayable","type":"function"}];
+const oracleContractAbiPath = path.resolve(__dirname, 'oracle-smart-contract-abi.json');
+const oracleContractAbi = JSON.parse(fs.readFileSync(oracleContractAbiPath, 'utf8'));
 
 const getLatestQuote = async symbol => {
     try {
