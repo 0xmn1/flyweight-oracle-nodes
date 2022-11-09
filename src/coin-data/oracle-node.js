@@ -31,7 +31,12 @@ const getLatestQuote = async symbol => {
     }
 };
 
-const sendNewPriceToContract = async ticker => {
+const writePricesCache = async prices => {
+    const pricesPath = path.resolve(__dirname, 'prices-cache.json');
+    fs.writeFileSync(pricesPath, JSON.stringify(prices));
+};
+
+const cacheNewPrice = async (prices, ticker) => {
     // Get price
     const lastTradedPriceNum = await getLatestQuote(ticker);
 
@@ -42,24 +47,35 @@ const sendNewPriceToContract = async ticker => {
     const contract = new ethers.Contract(ORACLE_CONTRACT_ADDRESS, oracleContractAbi, signer);
     const unixTimestamp = Math.floor(Date.now() / 1000);
 
-    const lastTradedPriceTruncated = lastTradedPriceNum.toFixed(4);
-    try {
-        const tx = await contract.functions.storePriceAndGetNewOrderResults(ticker, ticker, unixTimestamp.toString(), lastTradedPriceTruncated.toString());
-        console.log('Sending price data to oracle contract...');
-        const txReceipt = await tx.wait();
+    prices.push({
+        token0: ticker,
+        token1: ticker,
+        price: lastTradedPriceNum.toString(),
+        unixTimestamp: unixTimestamp.toString()
+    });
 
+    await writePricesCache(prices);
+};
+
+const tryUpdateContractState = async (prices, triggeredOrderIds) => {
+    try {
+        const tx = await contract.functions.storePricesAndProcessTriggeredOrderIds(prices, triggeredOrderIds);
+        console.log('Sending new data to oracle contract...');
+        const txReceipt = await tx.wait();
         if (txReceipt.status !== 1) {
-            throw 'Failed to submit transaction (to send price data to oracle contract)';
+            throw txReceipt;
         }
 
-        console.log('Successfully sent price data to oracle contract');
+        console.log('Sent.');
+        return true;
     } catch (err) {
+        console.error('Failed to update contract state:');
         console.error(err);
-        throw err;
+        return false;
     }
 };
 
-const getNewOrderResults = async data => {
+const checkOrders = async prices => {
     const web3Provider = `https://eth-goerli.g.alchemy.com/v2/${API_KEY_ALCHEMY}`;
     const alchemyProvider = new ethers.providers.AlchemyProvider(network="goerli", API_KEY_ALCHEMY);
     const signer = new ethers.Wallet(PRIVATE_KEY, alchemyProvider);
@@ -67,34 +83,41 @@ const getNewOrderResults = async data => {
 
     // 1. read contract state (orders+prices)
     const ordersCount = await contract.functions.ordersCount();
-    const pricesCount = await contract.functions.pricesCount();
 
     // 2. for ea order, note down result
     const triggeredOrderIds = [];
     for (let i = 0; i < ordersCount; i++) {
         const order = await contract.functions.orders(i);
-        const latestPrice = await contract.functions.prices(pricesCount - 1);
+        const tokenPrices = prices.filter(p => p.token0 === order.token0);
+        if (!tokenPrices.length) {
+            // Dont trigger order if no price data available
+            continue;
+        }
+
+        const latestTokenPrice = tokenPrices[tokenPrices.length - 1]
+        let isOrderTriggered = false;
         switch (order.direction) {
             case 'BELOW':
-                if (latestPrice < order.tokenInTriggerPrice) {
-                    triggeredOrderIds.push(order.id);
-                }
+                isOrderTriggered = latestTokenPrice < order.tokenInTriggerPrice;
                 break;
             case 'EQUAL':
-                if (latestPrice === order.tokenInTriggerPrice) {
-                    triggeredOrderIds.push(order.id);
-                }
+                isOrderTriggered = latestTokenPrice === order.tokenInTriggerPrice;
                 break;
             case 'ABOVE':
-                if (latestPrice > order.tokenInTriggerPrice) {
-                    triggeredOrderIds.push(order.id);
-                }
+                isOrderTriggered = latestTokenPrice > order.tokenInTriggerPrice;
                 break;
+        }
+
+        if (isOrderTriggered) {
+            triggeredOrderIds.push(order.id);
         }
     }
 
     // 3. call contract to store results
-    await contract.functions.storeAndProcessOrderResults(triggeredOrderIds);
+    if (await tryUpdateContractState(prices, triggeredOrderIds)) {
+        prices = [];
+        await writePricesCache(prices);
+    }
 };
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -105,14 +128,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     }).on('connected', subId => {
         console.log('Connected');
     }).on('data', async log => {
-       await getNewOrderResults(log.data);
+        // dm chkpt
     });
 
     // Periodically send new price to contract
+    const prices = [];
     while (true) {
-        await sendNewPriceToContract('UNI');
-
-        process.exit(); // dm
-        await sleep(60000);
+        await cacheNewPrice(prices, 'UNI');
+        await checkOrders(prices);
+        const sleepMs = 60000;
+        console.log(`Sleeping for ${sleepMs}ms`)
+        await sleep(sleepMs);
     }
 })();
