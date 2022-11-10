@@ -11,6 +11,11 @@ const web3Alchemy = new Web3(`wss://eth-goerli.g.alchemy.com/v2/${API_KEY_ALCHEM
 const oracleContractAbiPath = path.resolve(__dirname, 'oracle-smart-contract-abi.json');
 const oracleContractAbi = JSON.parse(fs.readFileSync(oracleContractAbiPath, 'utf8'));
 
+const web3Provider = `https://eth-goerli.g.alchemy.com/v2/${API_KEY_ALCHEMY}`;
+const alchemyProvider = new ethers.providers.AlchemyProvider(network="goerli", API_KEY_ALCHEMY);
+const signer = new ethers.Wallet(PRIVATE_KEY, alchemyProvider);
+const contract = new ethers.Contract(ORACLE_CONTRACT_ADDRESS, oracleContractAbi, signer);
+
 const getLatestQuote = async symbol => {
     try {
         const res = await axios.get(`https://pro-api.coinmarketcap.com/v2/cryptocurrency/quotes/latest?symbol=${symbol}`, {
@@ -41,10 +46,6 @@ const cacheNewPrice = async (prices, ticker) => {
     const lastTradedPriceNum = await getLatestQuote(ticker);
 
     // Send price to oracle contract
-    const web3Provider = `https://eth-goerli.g.alchemy.com/v2/${API_KEY_ALCHEMY}`;
-    const alchemyProvider = new ethers.providers.AlchemyProvider(network="goerli", API_KEY_ALCHEMY);
-    const signer = new ethers.Wallet(PRIVATE_KEY, alchemyProvider);
-    const contract = new ethers.Contract(ORACLE_CONTRACT_ADDRESS, oracleContractAbi, signer);
     const unixTimestamp = Math.floor(Date.now() / 1000);
 
     prices.push({
@@ -59,7 +60,10 @@ const cacheNewPrice = async (prices, ticker) => {
 
 const tryUpdateContractState = async (prices, triggeredOrderIds) => {
     try {
-        const tx = await contract.functions.storePricesAndProcessTriggeredOrderIds(prices, triggeredOrderIds);
+        const tx = await contract.functions.storePricesAndProcessTriggeredOrderIds(prices, triggeredOrderIds, {
+            gasLimit: 5000000
+        });
+
         console.log('Sending new data to oracle contract...');
         const txReceipt = await tx.wait();
         if (txReceipt.status !== 1) {
@@ -76,11 +80,6 @@ const tryUpdateContractState = async (prices, triggeredOrderIds) => {
 };
 
 const checkOrders = async prices => {
-    const web3Provider = `https://eth-goerli.g.alchemy.com/v2/${API_KEY_ALCHEMY}`;
-    const alchemyProvider = new ethers.providers.AlchemyProvider(network="goerli", API_KEY_ALCHEMY);
-    const signer = new ethers.Wallet(PRIVATE_KEY, alchemyProvider);
-    const contract = new ethers.Contract(ORACLE_CONTRACT_ADDRESS, oracleContractAbi, signer);
-
     // 1. read contract state (orders+prices)
     const ordersCount = await contract.functions.ordersCount();
 
@@ -88,35 +87,56 @@ const checkOrders = async prices => {
     const triggeredOrderIds = [];
     for (let i = 0; i < ordersCount; i++) {
         const order = await contract.functions.orders(i);
-        const tokenPrices = prices.filter(p => p.token0 === order.token0);
-        if (!tokenPrices.length) {
-            // Dont trigger order if no price data available
+        // If order already triggered
+        if (order.orderState !== 0) {
+            console.log(`Order #${order.id} already triggered, skipping order trigger check`);
             continue;
         }
 
-        const latestTokenPrice = tokenPrices[tokenPrices.length - 1]
+        const tokenPrices = prices.filter(p => p.token0.toUpperCase() === order.tokenIn.toUpperCase());
+        // If no price data
+        if (!tokenPrices.length) {
+            // Dont trigger order if no price data available
+            console.log(`No price data available for order #${order.id}, skipping order trigger check`);
+            continue;
+        }
+
+        const latestTokenPriceRecord = tokenPrices[tokenPrices.length - 1]
+        const latestTokenPrice = parseFloat(latestTokenPriceRecord.price);
         let isOrderTriggered = false;
+        console.log(`Checking if order #${order.id} triggered...`);
         switch (order.direction) {
-            case 'BELOW':
+            case 0: // below
+                console.log(`${latestTokenPrice} < ${order.tokenInTriggerPrice}?`);
                 isOrderTriggered = latestTokenPrice < order.tokenInTriggerPrice;
                 break;
-            case 'EQUAL':
+            case 1: // equal
+                console.log(`${latestTokenPrice} === ${order.tokenInTriggerPrice}?`);
                 isOrderTriggered = latestTokenPrice === order.tokenInTriggerPrice;
                 break;
-            case 'ABOVE':
+            case 2: // above
+                console.log(`${latestTokenPrice} > ${order.tokenInTriggerPrice}?`);
                 isOrderTriggered = latestTokenPrice > order.tokenInTriggerPrice;
                 break;
         }
 
         if (isOrderTriggered) {
+            console.log('Order triggered.')
             triggeredOrderIds.push(order.id);
+        } else {
+            console.log('Order not triggered.')
         }
     }
 
     // 3. call contract to store results
-    if (await tryUpdateContractState(prices, triggeredOrderIds)) {
-        prices = [];
-        await writePricesCache(prices);
+    if (triggeredOrderIds.length) {
+        console.log(`${triggeredOrderIds.length} orders triggered`);
+        if (await tryUpdateContractState(prices, triggeredOrderIds)) {
+            prices = [];
+            await writePricesCache(prices);
+        }
+    } else {
+        console.log('No orders triggered, skipping contract state update');
     }
 };
 
@@ -132,11 +152,20 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     });
 
     // Periodically send new price to contract
-    const prices = [];
+    
+    const pricesCachePath = path.resolve(__dirname, 'prices-cache.json');
+    const prices = fs.existsSync(pricesCachePath)
+        ? JSON.parse(fs.readFileSync(pricesCachePath))
+        : [];
+
     while (true) {
         await cacheNewPrice(prices, 'UNI');
         await checkOrders(prices);
-        const sleepMs = 60000;
+
+        // dm un-dm
+        //const sleepMs = 60000;
+        // dm
+        const sleepMs = 600000000;
         console.log(`Sleeping for ${sleepMs}ms`)
         await sleep(sleepMs);
     }
