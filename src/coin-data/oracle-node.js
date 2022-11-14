@@ -60,7 +60,21 @@ const cacheNewPrice = async (prices, ticker) => {
 
 const tryUpdateContractState = async (prices, triggeredOrderIds) => {
     try {
-        const tx = await contract.functions.storePricesAndProcessTriggeredOrderIds(prices, triggeredOrderIds, {
+
+        const latestPrices = [];
+        for (let i = 0; i < prices.length; i++) {
+            const price = prices[i];
+            const isLatestPriceMapped = latestPrices.find(lp => lp.symbol.toUpperCase() === price.token0.toUpperCase());
+            if (!isLatestPriceMapped) {
+                const pricesForSymbol = prices.filter(p => p.token0.toUpperCase() === price.token0.toUpperCase());
+                latestPrices.push({
+                    symbol: price.token0,
+                    price: price.price
+                });
+            }
+        }
+
+        const tx = await contract.functions.storePricesAndProcessTriggeredOrderIds(latestPrices, triggeredOrderIds, {
             gasLimit: 5000000
         });
 
@@ -94,6 +108,7 @@ const checkOrders = async prices => {
         }
 
         const tokenPrices = prices.filter(p => p.token0.toUpperCase() === order.tokenIn.toUpperCase());
+
         // If no price data
         if (!tokenPrices.length) {
             // Dont trigger order if no price data available
