@@ -1,1 +1,238 @@
-[{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"orders","outputs":[{"internalType":"uint256","name":"id","type":"uint256"},{"internalType":"enum Flyweight.OrderState","name":"orderState","type":"uint8"},{"internalType":"string","name":"tokenIn","type":"string"},{"internalType":"string","name":"tokenOut","type":"string"},{"internalType":"string","name":"tokenInTriggerPrice","type":"string"},{"internalType":"enum Flyweight.OrderTriggerDirection","name":"direction","type":"uint8"},{"internalType":"uint256","name":"tokenInAmount","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"ordersCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"prices","outputs":[{"internalType":"string","name":"token0","type":"string"},{"internalType":"string","name":"token1","type":"string"},{"internalType":"string","name":"price","type":"string"},{"internalType":"string","name":"unixTimestamp","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"pricesCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"components":[{"internalType":"string","name":"token0","type":"string"},{"internalType":"string","name":"token1","type":"string"},{"internalType":"string","name":"price","type":"string"},{"internalType":"string","name":"unixTimestamp","type":"string"}],"internalType":"struct Flyweight.Price[]","name":"newPrices","type":"tuple[]"},{"internalType":"uint256[]","name":"newTriggeredOrderIds","type":"uint256[]"}],"name":"storePricesAndProcessTriggeredOrderIds","outputs":[],"stateMutability":"nonpayable","type":"function"}]
+[
+    {
+      "inputs": [],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256"
+        }
+      ],
+      "name": "OrderExecuted",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256"
+        }
+      ],
+      "name": "OrderTriggered",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "timestamp",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "oldPrice",
+          "type": "string"
+        },
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "newPrice",
+          "type": "string"
+        }
+      ],
+      "name": "PriceUpdated",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "string",
+          "name": "tokenIn",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "tokenOut",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "tokenInTriggerPrice",
+          "type": "string"
+        },
+        {
+          "internalType": "enum Flyweight.OrderTriggerDirection",
+          "name": "direction",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint256",
+          "name": "tokenInAmount",
+          "type": "uint256"
+        }
+      ],
+      "name": "addNewOrder",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "orders",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "internalType": "enum Flyweight.OrderState",
+          "name": "orderState",
+          "type": "uint8"
+        },
+        {
+          "internalType": "string",
+          "name": "tokenIn",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "tokenOut",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "tokenInTriggerPrice",
+          "type": "string"
+        },
+        {
+          "internalType": "enum Flyweight.OrderTriggerDirection",
+          "name": "direction",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint256",
+          "name": "tokenInAmount",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "ordersCount",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "string",
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "name": "prices",
+      "outputs": [
+        {
+          "internalType": "string",
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "string",
+              "name": "symbol",
+              "type": "string"
+            },
+            {
+              "internalType": "string",
+              "name": "price",
+              "type": "string"
+            }
+          ],
+          "internalType": "struct Flyweight.NewPriceItem[]",
+          "name": "newPriceItems",
+          "type": "tuple[]"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "newTriggeredOrderIds",
+          "type": "uint256[]"
+        }
+      ],
+      "name": "storePricesAndProcessTriggeredOrderIds",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "string",
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "name": "tokenAddresses",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ]
