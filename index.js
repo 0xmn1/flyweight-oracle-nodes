@@ -2,19 +2,11 @@ const axios = require('axios');
 const Web3 = require('web3');
 const fs = require('fs');
 const path = require('path');
-
+const aws = require('aws-sdk');
 const { ethers } = require('ethers');
-require('dotenv').config();
-const { API_KEY_ALCHEMY, API_KEY_COINMARKETCAP, PRIVATE_KEY, ORACLE_CONTRACT_ADDRESS } = process.env;
 
-const web3Alchemy = new Web3(`wss://eth-goerli.g.alchemy.com/v2/${API_KEY_ALCHEMY}`);
-const oracleContractAbiPath = path.resolve(__dirname, 'oracle-smart-contract-abi.json');
-const oracleContractAbi = JSON.parse(fs.readFileSync(oracleContractAbiPath, 'utf8'));
-
-const web3Provider = `https://eth-goerli.g.alchemy.com/v2/${API_KEY_ALCHEMY}`;
-const alchemyProvider = new ethers.providers.AlchemyProvider(network="goerli", API_KEY_ALCHEMY);
-const signer = new ethers.Wallet(PRIVATE_KEY, alchemyProvider);
-const contract = new ethers.Contract(ORACLE_CONTRACT_ADDRESS, oracleContractAbi, signer);
+let API_KEY_COINMARKETCAP = null;
+let contract = null;
 
 const getLatestQuote = async symbol => {
     try {
@@ -149,28 +141,44 @@ const checkOrders = async prices => {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-exports.handler = async (event) => {
+const runOracleNode = async () => {
+    // decrypt .env using aws kms
+    let config = null;
+    try {
+        const kms = new aws.KMS({'region': 'ap-northeast-1'});
+        const envSecretsEncryptedPath = path.resolve(__dirname, 'build', 'env-secrets-encrypted.json');
+        const params = {
+          CiphertextBlob: fs.readFileSync(envSecretsEncryptedPath)
+        };
+
+        const data = await kms.decrypt(params).promise();
+        config = JSON.parse(data['Plaintext'].toString());
+    } catch (Error){
+        console.error(Error, Error.stack);
+        return {
+            statusCode: 500,
+            body: JSON.stringify('Sorry, something went wrong'),
+        };
+    }
+    
+    const oracleContractAbiPath = path.resolve(__dirname, 'oracle-smart-contract-abi.json');
+    const oracleContractAbi = JSON.parse(fs.readFileSync(oracleContractAbiPath, 'utf8'));
+    const alchemyProvider = new ethers.providers.AlchemyProvider(network="goerli", config.apiKeyAlchemy);
+    const signer = new ethers.Wallet(config.privateKey, alchemyProvider);
+    API_KEY_COINMARKETCAP = config.apiKeyCoinMarketCap;
+    contract = new ethers.Contract(config.oracleContractAddress, oracleContractAbi, signer);
+
+    console.log('Successfully extracted env secrets');
+    
     // Periodically send new price to contract
     const prices = [];
     await cacheNewPrice(prices, 'UNI');
     await checkOrders(prices);
 
-    // dm un-dm
-    //const sleepMs = 60000;
-    //const sleepMs = 600000000;
-    //console.log(`Sleeping for ${sleepMs}ms`)
-    //await sleep(sleepMs);
-    
-    // TODO implement
-    const response = {
+    return {
         statusCode: 200,
-        body: JSON.stringify('Hello from Lambda!'),
+        body: `Oracle successfully ran. The fetched prices were: ${JSON.stringify(prices)}`,
     };
-    return response;
 };
 
-
-
-
-
-
+exports.handler = async (event) => await runOracleNode();
