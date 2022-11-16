@@ -36,11 +36,6 @@ const getLatestQuote = async symbol => {
     }
 };
 
-const writePricesCache = async prices => {
-    const pricesPath = path.resolve(__dirname, 'prices-cache.json');
-    fs.writeFileSync(pricesPath, JSON.stringify(prices));
-};
-
 const cacheNewPrice = async (prices, ticker) => {
     // Get price
     const lastTradedPriceNum = await getLatestQuote(ticker);
@@ -54,8 +49,6 @@ const cacheNewPrice = async (prices, ticker) => {
         price: lastTradedPriceNum.toString(),
         unixTimestamp: unixTimestamp.toString()
     });
-
-    await writePricesCache(prices);
 };
 
 const tryUpdateContractState = async (prices, triggeredOrderIds) => {
@@ -148,7 +141,6 @@ const checkOrders = async prices => {
         console.log(`${triggeredOrderIds.length} orders triggered`);
         if (await tryUpdateContractState(prices, triggeredOrderIds)) {
             prices = [];
-            await writePricesCache(prices);
         }
     } else {
         console.log('No orders triggered, skipping contract state update');
@@ -157,31 +149,28 @@ const checkOrders = async prices => {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-(async () => {
-    await web3Alchemy.eth.subscribe('logs', {
-        address: ORACLE_CONTRACT_ADDRESS
-    }).on('connected', subId => {
-        console.log('Connected');
-    }).on('data', async log => {
-        // dm chkpt
-    });
-
+exports.handler = async (event) => {
     // Periodically send new price to contract
+    const prices = [];
+    await cacheNewPrice(prices, 'UNI');
+    await checkOrders(prices);
+
+    // dm un-dm
+    //const sleepMs = 60000;
+    //const sleepMs = 600000000;
+    //console.log(`Sleeping for ${sleepMs}ms`)
+    //await sleep(sleepMs);
     
-    const pricesCachePath = path.resolve(__dirname, 'prices-cache.json');
-    const prices = fs.existsSync(pricesCachePath)
-        ? JSON.parse(fs.readFileSync(pricesCachePath))
-        : [];
+    // TODO implement
+    const response = {
+        statusCode: 200,
+        body: JSON.stringify('Hello from Lambda!'),
+    };
+    return response;
+};
 
-    while (true) {
-        await cacheNewPrice(prices, 'UNI');
-        await checkOrders(prices);
 
-        // dm un-dm
-        //const sleepMs = 60000;
-        // dm
-        const sleepMs = 600000000;
-        console.log(`Sleeping for ${sleepMs}ms`)
-        await sleep(sleepMs);
-    }
-})();
+
+
+
+
